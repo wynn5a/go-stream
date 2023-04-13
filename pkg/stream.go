@@ -5,14 +5,20 @@ import (
 	"strings"
 )
 
-type Consumer[T any] func(t T)
+type Callback[T any] func(T)
 
-type Stream[T any] func(consumer Consumer[T])
+type Stream[T any] func(Callback[T])
+
+func Of[T any](t T) Stream[T] {
+	return func(c Callback[T]) {
+		c(t)
+	}
+}
 
 func From[T any](ts ...T) Stream[T] {
-	return func(consumer Consumer[T]) {
+	return func(c Callback[T]) {
 		for _, t := range ts {
-			consumer(t)
+			c(t)
 		}
 	}
 }
@@ -20,10 +26,10 @@ func From[T any](ts ...T) Stream[T] {
 type Mapper[T, R any] func(T) R
 
 func Map[T, R any](s Stream[T], mapper Mapper[T, R]) Stream[R] {
-	return func(consumer Consumer[R]) {
+	return func(c Callback[R]) {
 		s(func(t T) {
 			r := mapper(t)
-			consumer(r)
+			c(r)
 		})
 	}
 }
@@ -31,42 +37,42 @@ func Map[T, R any](s Stream[T], mapper Mapper[T, R]) Stream[R] {
 type FlatMapper[T, E any] func(T) Stream[E]
 
 func FlatMap[T, E any](s Stream[T], mapper FlatMapper[T, E]) Stream[E] {
-	return func(consumer Consumer[E]) {
+	return func(c Callback[E]) {
 		s(func(t T) {
-			mapper(t)(consumer)
+			mapper(t)(c)
 		})
 	}
 }
 
 func (s Stream[T]) Filter(f func(T) bool) Stream[T] {
-	return func(consumer Consumer[T]) {
+	return func(c Callback[T]) {
 		s(func(t T) {
 			if f(t) {
-				consumer(t)
+				c(t)
 			}
 		})
 	}
 }
 
 func (s Stream[T]) Take(n int) Stream[T] {
-	return func(consumer Consumer[T]) {
+	return func(callback Callback[T]) {
 		s.ConsumeTillStop(func(t T) {
 			if n <= 0 {
 				panic("stop")
 			}
-			consumer(t)
+			callback(t)
 			n--
 		})
 	}
 }
 
 func (s Stream[T]) Drop(n int) Stream[T] {
-	return func(consumer Consumer[T]) {
+	return func(callback Callback[T]) {
 		s(func(t T) {
 			if n > 0 {
 				n--
 			} else {
-				consumer(t)
+				callback(t)
 			}
 		})
 	}
@@ -92,24 +98,24 @@ func String[T any](t T) string {
 	return fmt.Sprintf("%v", t)
 }
 
-func (s Stream[T]) ConsumeTillStop(consumer Consumer[T]) {
+func (s Stream[T]) ConsumeTillStop(callback Callback[T]) {
 	defer func() {
 		if r := recover(); r != nil {
 		}
 	}()
 	s(func(t T) {
-		consumer(t)
+		callback(t)
 	})
 }
 
 func Zip[T, E, R any](s Stream[T], els []E, f func(T, E) R) Stream[R] {
 	var i int
-	return func(consumer Consumer[R]) {
+	return func(callback Callback[R]) {
 		s.ConsumeTillStop(func(t T) {
 			if i >= len(els) {
 				panic("stop")
 			}
-			consumer(f(t, els[i]))
+			callback(f(t, els[i]))
 			i++
 		})
 	}
@@ -121,15 +127,14 @@ func underscoreToCamelCase(str string) string {
 		return strings.ToUpper(s[0:1]) + s[1:]
 	}
 
-	stream := func(c Consumer[func(string) string]) {
+	stream := func(c Callback[func(string) string]) {
 		c(strings.ToLower)
 		for {
 			c(capitalize)
 		}
 	}
 
-	zipped := Zip(stream, strings.Split(str, "_"), func(f func(string) string, str string) string {
+	return Zip(stream, strings.Split(str, "_"), func(f func(string) string, str string) string {
 		return f(str)
-	})
-	return zipped.Join("")
+	}).Join("")
 }

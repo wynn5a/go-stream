@@ -1,10 +1,23 @@
 package pkg
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
 )
+
+func TestOf(t *testing.T) {
+	expected := "test"
+	var actual string
+	callback := func(s string) {
+		actual = s
+	}
+	Of(expected)(callback)
+	if actual != expected {
+		t.Errorf("Of test failed: expected %s, but got %s", expected, actual)
+	}
+}
 
 func TestFrom(t *testing.T) {
 	s := From(0, 1, 2)
@@ -23,7 +36,7 @@ func TestFrom(t *testing.T) {
 }
 
 func TestMapFunction(t *testing.T) {
-	s := func(c Consumer[int]) {
+	s := func(c Callback[int]) {
 		for i := 0; i < 10; i++ {
 			c(i)
 		}
@@ -36,6 +49,9 @@ func TestMapFunction(t *testing.T) {
 	if joined != expected {
 		t.Errorf("Map test failed: expected '%s', got '%s'", expected, joined)
 	}
+	From(1, 2, 3)(func(i int) {
+		fmt.Println(i)
+	})
 }
 
 func TestFlatMap(t *testing.T) {
@@ -114,7 +130,7 @@ func TestArray(t *testing.T) {
 }
 
 func TestZipFunction(t *testing.T) {
-	s := func(c Consumer[int]) {
+	s := func(c Callback[int]) {
 		for i := 0; i < 10; i++ {
 			c(i)
 		}
